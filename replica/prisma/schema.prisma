@@ -1,0 +1,165 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  fname      String
+  lname      String
+  email     String   @unique
+  mobileNo     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  buyers    Buyer[]
+  addresses Address[]
+  products  Product[]
+  orders    Order[]
+}
+
+
+model Buyer {
+  id            String  @id @default(uuid())
+  name          String
+  mobileNo      String
+  alternateNo   String?
+  email         String?
+
+  street        String
+  pincode       Int
+  city          String
+  state         String
+  country       String
+
+  sellerId     String
+  seller       User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  orders         Order[]
+}
+
+model Address {
+  id        String  @id @default(uuid())
+  tag       String
+  mobileNo  String
+  isDefault Boolean @default(false)
+
+  street    String
+  landmark  String?
+  pincode   Int
+  city      String
+  state     String
+  country   String
+
+  sellerId   String
+  seller     User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  pickupFor Order[] @relation("PickupAddress")
+  rtoFor    Order[] @relation("RtoAddress")
+
+  @@unique([sellerId,tag])
+
+}
+
+model Product {
+  id        String  @id @default(uuid())
+  pname     String
+  sku       String?
+  hsn       Int?
+  quantity  Int
+  price     Decimal
+
+  sellerId  String
+  seller    User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  // orderId   String
+  // order     Order   @relation(fields: [orderId], references: [id])
+
+  productOrders Product_Orders[]
+}
+
+model Product_Orders{
+  productId   String
+  orderId     String
+  unitPrice   Decimal
+  totalPrice  Decimal
+  quantity     Int
+  category    String
+
+  product     Product   @relation(fields: [productId],references: [id],onDelete: Cascade)
+  order     Order   @relation(fields: [orderId],references: [id],onDelete: Cascade)
+
+  @@id([productId,orderId])
+}
+
+model Package {
+  id              String  @id @default(uuid())
+  physicalWeight  Decimal
+  length          Decimal
+  breadth         Decimal
+  height          Decimal
+  volumetricWeight  Decimal
+  applicableWeight  Decimal
+
+  // orderId         String  @unique
+  // orderId           Order
+  // order           Order   @relation(fields: [orderId], references: [id],onDelete: Cascade)
+
+  order Order?
+}
+
+enum Payment {
+  COD
+  PREPAID
+}
+
+enum OrderStatus{
+  NEW
+  READY_TO_SHIP
+  MOVE_TO_SHIP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED_DELIVERY
+  RTO
+  CANCELLED
+}
+
+model Order {
+  id                String   @id @default(uuid())
+  createdAt         DateTime  @default(now())
+  sellerId          String
+  seller            User      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  pickupAddressId   String   @unique
+  rtoAddressId      String   @unique
+  buyerId           String   
+
+  pickupAddress     Address  @relation("PickupAddress", fields: [pickupAddressId], references: [id])
+  rtoAddress        Address  @relation("RtoAddress", fields: [rtoAddressId], references: [id])
+  buyer             Buyer    @relation(fields: [buyerId], references: [id])
+
+  // products          Product[]
+  packageId         String    @unique
+  package           Package   @relation(fields: [packageId], references: [id])
+
+  dangerous         Boolean  @default(false)
+  payment           Payment  
+  totalOrderValue   Decimal
+
+  updatedAt DateTime @updatedAt
+  status       OrderStatus   @default(NEW)
+
+
+
+  productOrders Product_Orders[]
+}
