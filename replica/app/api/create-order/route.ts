@@ -191,3 +191,196 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req :NextRequest){
   
 }
+
+export async function PUT(
+  req: Request,
+  { params }: { params: Promise<{ orderId: string }> }
+) {
+  try {
+    const id = await params;
+    const orderId = id.orderId;
+    const body = await req.json();
+
+    if (orderId) {
+      console.log(orderId);
+      
+    } else {
+      console.log("not found");
+      
+    }
+    
+
+    const {
+      payment,
+      dangerous,
+      totalOrderValue,
+      pickupAddressId,
+      rtoAddressId,
+      buyer,
+      package: packageData,
+      products,
+    } = body;
+
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      // 1️⃣ Update Buyer
+      await tx.buyer.update({
+        where: { id: buyer.id },
+        data: {
+          name: buyer.name,
+          mobileNo: buyer.mobileNo,
+          alternateNo: buyer.alternateNumber,
+          email: buyer.email,
+          street: buyer.street,
+          city: buyer.city,
+          state: buyer.state,
+          country: buyer.country,
+          pincode: buyer.pincode,
+          // landmark: buyer.landmark,
+          // customOrderNo: buyer.customOrderNo,
+        },
+      });
+
+      // 2️⃣ Update Package
+      await tx.package.update({
+        where: { id: packageData.id },
+        data: {
+          physicalWeight: packageData.physicalWeight,
+          length: packageData.length,
+          breadth: packageData.breadth,
+          height: packageData.height,
+          applicableWeight: packageData.applicableWeight,
+        },
+      });
+
+      // 3️⃣ Remove old product mappings
+      await tx.product_Orders.deleteMany({
+        where: { orderId },
+      });
+
+      // 4️⃣ Add updated products
+      await tx.product_Orders.createMany({
+        data: products.map((p: any) => ({
+          orderId,
+          productId: p.productId,
+          quantity: p.quantity,
+          unitPrice: p.unitPrice,
+          totalPrice: p.quantity * p.unitPrice,
+        })),
+      });
+
+      // 5️⃣ Update Order
+      return await tx.order.update({
+        where: { id: orderId },
+        data: {
+          payment,
+          dangerous,
+          totalOrderValue,
+          pickupAddressId,
+          rtoAddressId,
+        },
+        include: {
+          buyer: true,
+          package: true,
+          productOrders: {
+            include: { product: true },
+          },
+        },
+      });
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: updatedOrder,
+    });
+  } catch (error: any) {
+    console.error("ORDER UPDATE ERROR:", error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+
+
+// export async function PUT(
+//   req: Request,
+//   { params }: { params: { orderId: string } }
+// ) {
+//   try {
+//     const orderId = params.orderId;
+//     const body = await req.json();
+
+//     console.log(orderId);
+    
+//     const {
+//       status,
+//       payment,
+//       dangerous,
+//       totalOrderValue,
+//       pickupAddressId,
+//       rtoAddressId,
+//       products, // [{ productId, quantity, unitPrice }]
+//     } = body;
+
+//     const updatedOrder = await prisma.$transaction(async (tx) => {
+//       // 1️⃣ Check order exists
+//       const existingOrder = await tx.order.findUnique({
+//         where: { id: orderId },
+//       });
+
+//       if (!existingOrder) {
+//         throw new Error("Order not found");
+//       }
+
+//       // 2️⃣ Update order main fields
+//       const order = await tx.order.update({
+//         where: { id: orderId },
+//         data: {
+//           status,
+//           payment,
+//           dangerous,
+//           totalOrderValue,
+//           pickupAddressId,
+//           rtoAddressId,
+//         },
+//       });
+
+//       // 3️⃣ Update products if provided
+//       if (Array.isArray(products) && products.length > 0) {
+//         // delete old product mappings
+//         await tx.product_Orders.deleteMany({
+//           where: { orderId },
+//         });
+
+//         // create new product mappings
+//         await tx.product_Orders.createMany({
+//           data: products.map((p: any) => ({
+//             orderId,
+//             productId: p.productId,
+//             quantity: p.quantity,
+//             unitPrice: p.unitPrice,
+//             totalPrice: p.quantity * p.unitPrice,
+//           })),
+//         });
+//       }
+
+//       return order;
+//     });
+
+//     return NextResponse.json({
+//       success: true,
+//       message: "Order updated successfully",
+//       data: updatedOrder,
+//     });
+//   } catch (error: any) {
+//     console.error(error);
+//     return NextResponse.json(
+//       {
+//         success: false,
+//         message: error.message || "Failed to update order",
+//       },
+//       { status: 400 }
+//     );
+//   }
+// }

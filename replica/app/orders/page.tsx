@@ -43,12 +43,12 @@ export default function Orders() {
 
     console.log(params);
     // params ? const res = await fetch(`/api/create-order?${params.toString()}`) :const res = await fetch(`/api/create-order`);
-    // const res = await fetch(`/api/create-order?${params.toString()}`);
-    // const data = await res.json();
+    const res = await fetch(`/api/create-order?${params.toString()}`);
+    const data = await res.json();
 
     
-    // setOrders(Array.isArray(data) ? data : [data]);
-    // setLoading(false);
+    setOrders(Array.isArray(data) ? data : [data]);
+    setLoading(false);
   };
 
   const editHandler =()=>{

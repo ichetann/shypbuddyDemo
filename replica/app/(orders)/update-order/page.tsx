@@ -9,9 +9,20 @@ export default function Update() {
   const [orderData, setOrderData] = useState<any>({});
   const [dangerousGoods, setDangerousGoods] = useState<boolean>(false);
   const [search, setSearch] = useState("");
+  const [rtoSearch, setRtoSearch] = useState("");
   const [pickupAddress, setPickupAddress] = useState(null);
   const [addresses, setAddresses] = useState<any[]>([]); //its pickup and rto address
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+
+  const [productOrders, setProductOrders] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (orderData?.productOrders) {
+      setProductOrders(orderData.productOrders);
+    }
+  }, [orderData]);
+
   const [buyer, setBuyer] = useState({
     name: "",
     mobileNo: "",
@@ -27,8 +38,8 @@ export default function Update() {
     buyerState: "",
     buyerCountry: "",
   });
-  const [product, setProduct] = useState<any>({
-    name: "",
+  const [product, setProduct] = useState({
+    pname: "",
     category: "",
     sku: "",
     hsn: "",
@@ -53,42 +64,26 @@ export default function Update() {
 
   const [pickupId, setPickupId] = useState<string | null>(null);
 
-  const l = Number(packageDetails.length);
-  const b = Number(packageDetails.breadth);
-  const h = Number(packageDetails.height);
-  const pw = Number(packageDetails.physicalWeight);
+  const [isRtoSame, setIsRtoSame] = useState(true);
+  const [rtoId, setRtoId] = useState<string | null>(null);
+  const [showRtoPicker, setShowRtoPicker] = useState(false);
+  const [rtoAddresses, setRtoAddresses] = useState<any[]>([]);
+  const l = Number(orderData?.package?.length);
+  const b = Number(orderData?.package?.breadth);
+  const h = Number(orderData?.package?.height);
+  const pw = Number(orderData?.package?.physicalWeight);
   const isValid: boolean =
     Number(l) > 0.5 && Number(b) > 0.5 && Number(h) > 0.5;
   const volumetricWeight = isValid
     ? ((Number(l) * Number(b) * Number(h)) / 5000).toFixed(2)
     : null;
 
-    
-
   const applicableWeight = Math.max(Number(pw), Number(volumetricWeight));
 
-  const buyerHandler = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-
-    setBuyer((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-    console.log(buyer);
-  };
-  const addressHandler = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-
-    setBuyerAddress((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-    console.log(buyerAddress);
-  };
   const productHandler = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
 
-    setProduct((prev) => ({
+    setProduct((prev: any) => ({
       ...prev,
       [name]: value,
     }));
@@ -96,26 +91,33 @@ export default function Update() {
   };
 
   const addProduct = () => {
-    if (!product.name || !product.quantity || !product.price) {
-      alert("Product name, quantity and price are required");
-      return;
+    const newProductOrder = {
+      product: {
+        pname: product.pname,
+        category: product.category,
+        sku: product.sku,
+        hsn: Number(product.hsn),
+      },
+      quantity: Number(product.quantity),
+      unitPrice: Number(product.price),
+      totalPrice: Number(product.quantity) * Number(product.price),
+    };
+
+    // 🔁 UPDATE MODE
+    if (editIndex !== null) {
+      setProductOrders((prev) =>
+        prev.map((item, i) => (i === editIndex ? newProductOrder : item))
+      );
+      setEditIndex(null);
+    }
+    // ➕ ADD MODE
+    else {
+      setProductOrders((prev) => [...prev, newProductOrder]);
     }
 
-    setProducts((prev) => [
-      ...prev,
-      {
-        ...product,
-        category: product.category,
-        quantity: Number(product.quantity),
-        price: Number(product.price),
-        total: Number(product.quantity) * Number(product.price),
-      },
-    ]);
-
-    console.log(products);
-
+    // 🧹 Reset form
     setProduct({
-      name: "",
+      pname: "",
       category: "",
       sku: "",
       hsn: "",
@@ -124,24 +126,13 @@ export default function Update() {
     });
   };
 
-  const packageHandler = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchAddresses(search);
+    }, 500);
 
-    setPackageDetails((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    console.log(packageDetails);
-    // console.log();
-  };
-
-  //   useEffect(() => {
-  //     const timer = setTimeout(() => {
-  //       fetchAddresses(search);
-  //     }, 500);
-
-  //     return () => clearTimeout(timer);
-  //   }, [search]);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     const total = products.reduce((sum, p) => sum + Number(p.total), 0);
@@ -164,30 +155,84 @@ export default function Update() {
   };
 
   //   update
-  const updateOrder = () => {};
+  const updateOrder = () => {
+    console.log(orderData);
+  };
 
   const fetchOrders = async () => {
     const res = await fetch(`/api/create-order?orderId=${id}`);
     const data = await res.json();
     console.log(data);
-    setOrderData(data);
+    setOrderData({
+      ...data,
+      buyer: data.buyer ?? {},
+      package: data.package ?? {},
+    });
   };
   useEffect(() => {
     // const data;
     fetchOrders();
   }, []);
 
+  useEffect(() => {
+    if (!showRtoPicker) return;
+
+    const timer = setTimeout(async () => {
+      const url =
+        rtoSearch.trim() === ""
+          ? "/api/addAddress"
+          : `/api/addAddress?q=${encodeURIComponent(rtoSearch)}`;
+
+      const res = await fetch(url);
+      const data = await res.json();
+      setRtoAddresses(data.data || []);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [rtoSearch, showRtoPicker]);
+
   const handleChange = (
-  e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-) => {
-  const { name, value } = e.target;
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
 
-  setOrderData((prev: any) => ({
-    ...prev,
-    [name]: value,
-  }));
-};
+    setOrderData((prev: any) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
+  const handleNestedChange = (
+    section: "buyer" | "package",
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } = e.target;
+
+    setOrderData((prev: any) => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        [name]: value,
+      },
+    }));
+  };
+
+  useEffect(() => {
+    if (orderData?.pickupAddress) {
+      setSearch(
+        `${orderData.pickupAddress.street}, ${orderData.pickupAddress.city}, ${orderData.pickupAddress.state} - ${orderData.pickupAddress.pincode}, ${orderData.pickupAddress.country}`
+      );
+      setPickupId(orderData.pickupAddress.id);
+    }
+  }, [orderData]);
+  useEffect(() => {
+    if (orderData?.rtoAddress && !rtoSearch) {
+      setRtoSearch(
+        `${orderData.rtoAddress.street}, ${orderData.rtoAddress.city}, ${orderData.rtoAddress.state} - ${orderData.rtoAddress.pincode}, ${orderData.rtoAddress.country}`
+      );
+      setRtoId(orderData.rtoAddress.id);
+    }
+  }, [orderData]);
 
   return (
     <div className="min-h-screen bg-[#24303f] text-white w-full max-w-7xl mx-auto p-2">
@@ -202,14 +247,7 @@ export default function Update() {
         <p>Where is the order being sent from?</p>
         <input
           type="text"
-          value={
-            // selectedAddress
-            //   ? `${selectedAddress.street}, ${selectedAddress.city}, ${selectedAddress.state} - ${selectedAddress.pincode}, ${selectedAddress.country}`
-            //   : search
-            orderData.pickupAddress
-              ? `${orderData?.pickupAddress?.street}, ${orderData?.pickupAddress?.city}, ${orderData?.pickupAddress?.state} - ${orderData?.pickupAddress?.pincode}, ${orderData?.pickupAddress?.country}`
-              : search
-          }
+          value={search}
           className="lg:max-w-160 w-full border border-gray-300 px-3 py-1.5 bg-[#1d2a39] rounded-lg"
           onChange={(e) => {
             // console.log(selectedAddress.id);
@@ -227,10 +265,12 @@ export default function Update() {
                 className="p-2 hover:bg-[#1d2a39] cursor-pointer"
                 onClick={() => {
                   setSelectedAddress(addr);
-                  console.log(addr.id);
+                  setPickupId(addr.id);
 
-                  //   setPickupId(addr.id)
-                  setSearch("");
+                  setSearch(
+                    `${addr.street}, ${addr.city}, ${addr.state} - ${addr.pincode}, ${addr.country}`
+                  );
+
                   setAddresses([]);
                 }}
               >
@@ -245,13 +285,67 @@ export default function Update() {
         <Link href={"/add-address"}>
           <p className="my-4">Add new pickup address</p>
         </Link>
-        <label className="flex items-center gap-2 text-sm text-gray-600">
+        <label className="flex items-center gap-2 text-sm text-gray-600 m-2">
           <input
             type="checkbox"
-            className=" border-gray-300 bg-white rounded-lg"
+            checked={isRtoSame}
+            className=" border-gray-300 bg-white rounded-lg block "
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setIsRtoSame(checked);
+
+              if (checked) {
+                setRtoId(pickupId); // same as pickup
+              } else {
+                setShowRtoPicker(true); // open modal
+              }
+            }}
           />
           RTO (Return To Origin) Address is same as PickUp Address
         </label>
+        {showRtoPicker && (
+          <div className="w-full">
+            <input
+              type="text"
+              value={rtoSearch}
+              className="lg:max-w-160 w-full border border-gray-300 px-3 py-1.5 bg-[#1d2a39] rounded-lg"
+              onChange={(e) => {
+                // console.log(selectedAddress.id);
+                setRtoAddresses([]);
+                setRtoSearch(e.target.value);
+                setRtoId(null);
+              }}
+            />
+
+            {/* fetch */}
+            {rtoAddresses.length > 0 && (
+              <div className="absolute z-50 w-full border mt-1 rounded bg-[#24303f] text-white max-h-48 overflow-auto">
+                {addresses.map((addr) => (
+                  <div
+                    key={addr.id}
+                    className="p-2 hover:bg-[#1d2a39] cursor-pointer"
+                    onClick={() => {
+                      // setRtoAddresses(addr);
+                      setRtoId(addr.id);
+
+                      setRtoSearch(
+                        `${addr.street}, ${addr.city}, ${addr.state} - ${addr.pincode}, ${addr.country}`
+                      );
+
+                      setRtoAddresses([]);
+                      setShowRtoPicker(false);
+                    }}
+                  >
+                    <p className="font-medium">{addr.tag}</p>
+                    <p className="text-sm text-gray-600">
+                      {addr.street}, {addr.city}, {addr.state}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <div className="w-full bg-[#24303f]">
         <h3 className="font-extrabold text-xl">Add Buyer's Details</h3>
@@ -265,8 +359,8 @@ export default function Update() {
             </label>
             <input
               name="name"
-              onChange={handleChange}
-              value={orderData?.buyer?.name}
+              onChange={(e) => handleNestedChange("buyer", e)}
+              value={orderData?.buyer?.name || ""}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
               placeholder="Enter Buyer's Name"
@@ -276,7 +370,7 @@ export default function Update() {
             <label htmlFor="">Buyer's Number</label>
             <input
               name="mobileNo"
-              onChange={handleChange}
+              onChange={(e) => handleNestedChange("buyer", e)}
               value={orderData?.buyer?.mobileNo}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -287,7 +381,7 @@ export default function Update() {
             <label htmlFor="">Alternate Number</label>
             <input
               name="alternateNumber"
-              onChange={handleChange}
+              onChange={(e) => handleNestedChange("buyer", e)}
               value={orderData?.buyer?.alternateNo}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -298,7 +392,7 @@ export default function Update() {
             <label htmlFor="">Email</label>
             <input
               name="email"
-              onChange={handleChange}
+              onChange={(e) => handleNestedChange("buyer", e)}
               value={orderData?.buyer?.email}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -312,7 +406,7 @@ export default function Update() {
             <input
               name="customOrderNo"
               value={orderData?.buyer?.customOrderNo}
-              onChange={handleChange}
+              onChange={(e) => handleNestedChange("buyer", e)}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
               placeholder="Custom Order No"
@@ -332,9 +426,9 @@ export default function Update() {
             </label>
             <input
               type="text"
-              name="buyer.street"
+              name="street"
               value={orderData?.buyer?.street}
-              onChange={addressHandler}
+              onChange={(e) => handleNestedChange("buyer", e)}
               className="w-full border border-gray-500 p-1 my-2  bg-[#1d2a39] rounded-lg"
               placeholder="House/Floor No, Building name or Street, Locality"
             />
@@ -344,8 +438,8 @@ export default function Update() {
               Buyer's Pincode <span className="text-red-500">*</span>
             </label>
             <input
-              name="buyerPincode"
-              onChange={addressHandler}
+              name="pincode"
+              onChange={(e) => handleNestedChange("buyer", e)}
               value={orderData?.buyer?.pincode}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -359,8 +453,8 @@ export default function Update() {
               Landmark
             </label>
             <input
-              name="buyerLandmark"
-              onChange={addressHandler}
+              name="landmark"
+              onChange={(e) => handleNestedChange("buyer", e)}
               value={orderData?.buyer?.landmark}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -373,8 +467,8 @@ export default function Update() {
               Buyer's City
             </label>
             <input
-              name="buyerCity"
-              onChange={addressHandler}
+              name="city"
+              onChange={(e) => handleNestedChange("buyer", e)}
               value={orderData?.buyer?.city}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -387,8 +481,8 @@ export default function Update() {
               Buyer's State
             </label>
             <input
-              name="buyerState"
-              onChange={addressHandler}
+              name="state"
+              onChange={(e) => handleNestedChange("buyer", e)}
               value={orderData?.buyer?.state}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -401,8 +495,8 @@ export default function Update() {
               Buyer's Country
             </label>
             <input
-              name="buyerCountry"
-              onChange={addressHandler}
+              name="country"
+              onChange={(e) => handleNestedChange("buyer", e)}
               value={orderData?.buyer?.country}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -423,8 +517,8 @@ export default function Update() {
               Product Name
             </label>
             <input
-              name="name"
-              value={product.name}
+              name="pname"
+              value={product.pname}
               onChange={productHandler}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -478,6 +572,7 @@ export default function Update() {
             </label>
             <input
               name="quantity"
+              value={product.quantity}
               onChange={productHandler}
               type="text"
               className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -503,12 +598,12 @@ export default function Update() {
           type="button"
           onClick={addProduct}
         >
-          Add Product
+          {editIndex !== null ? "Update Product" : "Add Product"}
         </button>
       </div>{" "}
-      {orderData?.productOrders?.map((po, index) => (
+      {productOrders?.map((po: any, index: any) => (
         <div
-          key={po.productId}
+          key={index}
           className="max-w-md bg-[#475569] text-white rounded-xl my-4"
         >
           {/* Header */}
@@ -517,8 +612,9 @@ export default function Update() {
 
             <div className="ml-auto">
               <button
-                className="mx-2 text-red-400"
+                className="mx-2 text-blue-400"
                 onClick={() => {
+                  setEditIndex(index);
                   setProduct({
                     pname: po.product.pname,
                     category: po.product.category || "",
@@ -531,13 +627,28 @@ export default function Update() {
               >
                 Edit
               </button>
+
               <button
-                className="ml-auto text-red-400"
-                onClick={() =>
-                  setProducts((prev) => prev.filter((_, i) => i !== index))
-                }
+                className="text-red-400"
+                onClick={() => {
+                  setProductOrders((prev) =>
+                    prev.filter((_, i) => i !== index)
+                  );
+
+                  if (editIndex === index) {
+                    setEditIndex(null);
+                    setProduct({
+                      pname: "",
+                      category: "",
+                      sku: "",
+                      hsn: "",
+                      quantity: "",
+                      price: "",
+                    });
+                  }
+                }}
               >
-                delete
+                Delete
               </button>
             </div>
           </div>
@@ -571,109 +682,104 @@ export default function Update() {
           </div>
         </div>
       ))}
-{/* product end */}
-
-
+      {/* product end */}
       <div className="my-5">
-          <h3 className="font-extrabold">Package Details</h3>
-          <p className="font-bold mb-4">
-            How much weight does your package contain?
-          </p>
-          <div className="flex gap-5">
-            <div className="flex-1">
+        <h3 className="font-extrabold">Package Details</h3>
+        <p className="font-bold mb-4">
+          How much weight does your package contain?
+        </p>
+        <div className="flex gap-5">
+          <div className="flex-1">
+            <label htmlFor="" className="font-semibold">
+              Physical Weight
+            </label>
+            <div className="flex items-center">
+              <span className="bg-white py-1.5 px-2 border text-black">Kg</span>
+              <input
+                name="physicalWeight"
+                value={orderData.package?.physicalWeight}
+                onChange={(e) => handleNestedChange("package", e)}
+                type="text"
+                className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-r-lg"
+                placeholder="0.00"
+              />
+            </div>
+            <div className="text-gray-500 font-medium text-xs">
+              <h3>(Max 3 digits after the decimal place)</h3>
+              <p>Note: The minimum chargeable weight is 0.50 Kg</p>
+            </div>
+          </div>
+          <div className="flex-1">
+            <div>
               <label htmlFor="" className="font-semibold">
-                Physical Weight
+                Enter package dimensions (L*B*H) to calculate volumetric weight
               </label>
+            </div>
+            <div className="flex gap-3">
               <div className="flex items-center">
                 <span className="bg-white py-1.5 px-2 border text-black">
-                  Kg
+                  CM
                 </span>
+
                 <input
-                  name="physicalWeight"
-                  value={orderData.package?.physicalWeight}
-                  onChange={packageHandler}
+                  name="length"
+                  value={orderData.package?.length}
+                  onChange={(e) => handleNestedChange("package", e)}
                   type="text"
                   className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-r-lg"
-                  placeholder="0.00"
+                  placeholder="length"
                 />
               </div>
-              <div className="text-gray-500 font-medium text-xs">
-                <h3>(Max 3 digits after the decimal place)</h3>
-                <p>Note: The minimum chargeable weight is 0.50 Kg</p>
+              <div className="flex items-center">
+                <span className="bg-white py-1.5 px-2 border text-black">
+                  CM
+                </span>
+
+                <input
+                  name="breadth"
+                  value={orderData.package?.breadth}
+                  onChange={(e) => handleNestedChange("package", e)}
+                  type="text"
+                  className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-r-lg"
+                  placeholder="breadth"
+                />
+              </div>
+              <div className="flex items-center">
+                <span className="bg-white py-1.5 px-2 border text-black">
+                  CM
+                </span>
+
+                <input
+                  name="height"
+                  value={orderData.package?.height}
+                  onChange={(e) => handleNestedChange("package", e)}
+                  type="text"
+                  className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-r-lg"
+                  placeholder="height"
+                />
               </div>
             </div>
-            <div className="flex-1">
-              <div>
-                <label htmlFor="" className="font-semibold">
-                  Enter package dimensions (L*B*H) to calculate volumetric
-                  weight
-                </label>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex items-center">
-                  <span className="bg-white py-1.5 px-2 border text-black">
-                    CM
-                  </span>
-
-                  <input
-                    name="length"
-                    value={orderData.package?.length}
-                    onChange={packageHandler}
-                    type="text"
-                    className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-r-lg"
-                    placeholder="length"
-                  />
-                </div>
-                <div className="flex items-center">
-                  <span className="bg-white py-1.5 px-2 border text-black">
-                    CM
-                  </span>
-
-                  <input
-                    name="breadth"
-                    value={orderData.package?.breadth}
-                    onChange={packageHandler}
-                    type="text"
-                    className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-r-lg"
-                    placeholder="breadth"
-                  />
-                </div>
-                <div className="flex items-center">
-                  <span className="bg-white py-1.5 px-2 border text-black">
-                    CM
-                  </span>
-
-                  <input
-                    name="height"
-                    value={orderData.package?.height}
-                    onChange={packageHandler}
-                    type="text"
-                    className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-r-lg"
-                    placeholder="height"
-                  />
-                </div>
-              </div>
-              <div className="text-gray-500 font-medium text-xs">
-                <p>
-                  Note: Dimensions should be in centimeters only & values should
-                  be greater than 0.50 cm
-                </p>
-              </div>
+            <div className="text-gray-500 font-medium text-xs">
+              <p>
+                Note: Dimensions should be in centimeters only & values should
+                be greater than 0.50 cm
+              </p>
             </div>
-
-            {/* end pachage details */}
           </div>
-          {isValid && (
-            <div className="flex w-full text-center gap-2 flex-wrap">
-              <div className="p-2 bg-pink-200 text-black flex-1 rounded-lg w-full min-w-60">
-                <h1>Volumetric Weight: {volumetricWeight} kg</h1>
-              </div>
-              <div className="p-2 bg-green-200 text-black flex-1 rounded-lg w-full min-w-60">
-                <h1>Applicable Weight: {applicableWeight} kg</h1>
-              </div>
+
+          {/* end pachage details */}
+        </div>
+        {isValid && (
+          <div className="flex w-full text-center gap-2 flex-wrap">
+            <div className="p-2 bg-pink-200 text-black flex-1 rounded-lg w-full min-w-60">
+              <h1>Volumetric Weight: {volumetricWeight} kg</h1>
             </div>
-          )}
-          {/* <div className="my-6">
+            <div className="p-2 bg-green-200 text-black flex-1 rounded-lg w-full min-w-60">
+              <h1>Applicable Weight: {applicableWeight} kg</h1>
+            </div>
+          </div>
+        )}
+        {/* <div className="my-6">
             <h3 className="font-extrabold">Dangerous Goods</h3>
             <p className="font-bold">
               Indicate whether the order contains any dangerous goods
@@ -684,108 +790,109 @@ export default function Update() {
               <input type="radio" />
               <label htmlFor="">No</label>
             </div> */}
-          <div className="my-6">
-            <h3 className="font-extrabold">Dangerous Goods</h3>
-            <p className="font-bold">
-              Indicate whether the order contains any dangerous goods
-            </p>
+        <div className="my-6">
+          <h3 className="font-extrabold">Dangerous Goods</h3>
+          <p className="font-bold">
+            Indicate whether the order contains any dangerous goods
+          </p>
 
-            <div className="flex gap-6 my-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  value={orderData.dangerous}
-                  name="dangerousGoods"
-                  checked={dangerousGoods === true}
-                  onChange={() => setDangerousGoods(true)}
-                />
-                Yes
-              </label>
+          <div className="flex gap-6 my-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                // value={orderData.dangerous}
+                name="dangerous"
+                checked={orderData?.dangerous === true}
+                onChange={() =>
+                  setOrderData((prev: any) => ({ ...prev, dangerous: true }))
+                }
+              />
+              Yes
+            </label>
 
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="dangerousGoods"
-                  value={orderData.dangerous}
-                  checked={dangerousGoods === false}
-                  onChange={() => setDangerousGoods(false)}
-                />
-                No
-              </label>
-            </div>
-
-            {/* </div> */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="dangerousGoods"
+                // value={orderData?.dangerous}
+                checked={orderData?.dangerous === false}
+                onChange={() =>
+                  setOrderData((prev: any) => ({ ...prev, dangerous: false }))
+                }
+              />
+              No
+            </label>
           </div>
-          <div className="my-6">
-            <h3 className="font-extrabold">Payment Method</h3>
-            <p className="font-bold">
-              Select Mode of Payment that your buyer has chosen for the order
-            </p>
-            <div className="space-x-4 my-3 flex">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="paymentMethod"
-                //   value="PREPAID"
-                value={orderData.payment}
-                  checked={paymentMethod === "PREPAID"}
-                  onChange={(e) =>
-                    setPaymentMethod(e.target.value as "PREPAID")
-                  }
-                />
-                Prepaid
-              </label>
 
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="paymentMethod"
-                //   value="COD"
-                value={orderData.payment}
-                  checked={paymentMethod === "COD"}
-                  onChange={(e) => setPaymentMethod(e.target.value as "COD")}
-                />
-                Cash on Delivery
-              </label>
-            </div>
+          {/* </div> */}
+        </div>
+        <div className="my-6">
+          <h3 className="font-extrabold">Payment Method</h3>
+          <p className="font-bold">
+            Select Mode of Payment that your buyer has chosen for the order
+          </p>
+          <div className="space-x-4 my-3 flex">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="payment"
+                value="PREPAID"
+                // value={orderData.payment}
+                checked={orderData?.payment === "PREPAID"}
+                onChange={handleChange}
+              />
+              Prepaid
+            </label>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="payment"
+                value="COD"
+                // value={orderData.payment}
+                checked={orderData?.payment === "COD"}
+                onChange={handleChange}
+              />
+              Cash on Delivery
+            </label>
           </div>
-          {/* closing radio btns */}
-          {/* <div className="max-w-6xl bg-white text-black my-8 flex p-2 ">
+        </div>
+        {/* closing radio btns */}
+        {/* <div className="max-w-6xl bg-white text-black my-8 flex p-2 ">
             <p className="font-semibold">Total Order Value</p>
             {/* <input
               className="font-bold ml-auto"
               contentEditable
               value={"₹ 200"}
             ></input> */}
-          {/* </div> */}
-          <div className="max-w-6xl bg-white text-black my-8 flex items-center p-3 rounded-lg">
-            <p className="font-semibold">Total Order Value</p>
+        {/* </div> */}
+        <div className="max-w-6xl bg-white text-black my-8 flex items-center p-3 rounded-lg">
+          <p className="font-semibold">Total Order Value</p>
 
-            <input
-              type="number"
-              className="ml-auto w-40 border border-gray-400 px-2 py-1 rounded text-right"
-              value={orderTotal}
-              onChange={(e) => setOrderTotal(Number(e.target.value))}
-            />
-          </div>
+          <input
+            type="number"
+            className="ml-auto w-40 border border-gray-400 px-2 py-1 rounded text-right"
+            name="totalOrderValue"
+            value={orderData?.totalOrderValue || ""}
+            onChange={handleChange}
+          />
+        </div>
 
-          <div className="flex">
-            <div></div>
-            <div className="ml-auto mr-4">
-              <button
-                className="mx-4 px-4 py-2 bg-white text-black rounded-lg"
-                onClick={updateOrder}
-              >
-                Update
-              </button>
-              <button className="mx-4 px-4 py-2 bg-red-500 rounded-lg text-white">
-                Cancel
-              </button>
-            </div>
+        <div className="flex">
+          <div></div>
+          <div className="ml-auto mr-4">
+            <button
+              className="mx-4 px-4 py-2 bg-white text-black rounded-lg"
+              onClick={updateOrder}
+            >
+              Update
+            </button>
+            <button className="mx-4 px-4 py-2 bg-red-500 rounded-lg text-white">
+              Cancel
+            </button>
           </div>
         </div>
-        
-
+      </div>
     </div> //root div
   );
 }
