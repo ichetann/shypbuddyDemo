@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { redirect, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function Update() {
@@ -15,29 +15,8 @@ export default function Update() {
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [editIndex, setEditIndex] = useState<number | null>(null);
 
-  const [productOrders, setProductOrders] = useState<any[]>([]);
 
-  useEffect(() => {
-    if (orderData?.productOrders) {
-      setProductOrders(orderData.productOrders);
-    }
-  }, [orderData]);
 
-  const [buyer, setBuyer] = useState({
-    name: "",
-    mobileNo: "",
-    alternateNumber: "",
-    email: "",
-    customOrderNo: "",
-  });
-  const [buyerAddress, setBuyerAddress] = useState({
-    buyerStreet: "",
-    buyerPincode: "",
-    buyerLandmark: "",
-    buyerCity: "",
-    buyerState: "",
-    buyerCountry: "",
-  });
   const [product, setProduct] = useState({
     pname: "",
     category: "",
@@ -49,14 +28,7 @@ export default function Update() {
   const [products, setProducts] = useState<any[]>([]);
   const [calculatedTotal, setCalculatedTotal] = useState(0);
   const [orderTotal, setOrderTotal] = useState(0);
-  const [packageDetails, setPackageDetails] = useState({
-    physicalWeight: "",
-    length: "",
-    breadth: "",
-    height: "",
-    volumetricWeight: "",
-    applicableWeight: "",
-  });
+
 
   const [paymentMethod, setPaymentMethod] = useState<"PREPAID" | "COD" | "">(
     ""
@@ -68,10 +40,10 @@ export default function Update() {
   const [rtoId, setRtoId] = useState<string | null>(null);
   const [showRtoPicker, setShowRtoPicker] = useState(false);
   const [rtoAddresses, setRtoAddresses] = useState<any[]>([]);
-  const l = Number(orderData?.package?.length);
-  const b = Number(orderData?.package?.breadth);
-  const h = Number(orderData?.package?.height);
-  const pw = Number(orderData?.package?.physicalWeight);
+  const l = Number(orderData?.packageData?.length);
+  const b = Number(orderData?.packageData?.breadth);
+  const h = Number(orderData?.packageData?.height);
+  const pw = Number(orderData?.packageData?.physicalWeight);
   const isValid: boolean =
     Number(l) > 0.5 && Number(b) > 0.5 && Number(h) > 0.5;
   const volumetricWeight = isValid
@@ -97,6 +69,8 @@ export default function Update() {
         category: product.category,
         sku: product.sku,
         hsn: Number(product.hsn),
+        quantity: Number(product.quantity),
+        price: Number(product.price),
       },
       quantity: Number(product.quantity),
       unitPrice: Number(product.price),
@@ -105,25 +79,29 @@ export default function Update() {
 
     // 🔁 UPDATE MODE
     if (editIndex !== null) {
-      setProductOrders((prev) =>
+      setProducts((prev) =>
         prev.map((item, i) => (i === editIndex ? newProductOrder : item))
       );
+      // setProductOrders((prev) =>
+      //   prev.map((item, i) => (i === editIndex ? newProductOrder : item))
+      // );
       setEditIndex(null);
     }
     // ➕ ADD MODE
     else {
-      setProductOrders((prev) => [...prev, newProductOrder]);
+      setProducts((prev) => [...prev, newProductOrder]);
+      // setProductOrders((prev) => [...prev, newProductOrder]);
     }
 
     // 🧹 Reset form
-    setProduct({
-      pname: "",
-      category: "",
-      sku: "",
-      hsn: "",
-      quantity: "",
-      price: "",
-    });
+    // setProduct({
+    //   pname: "",
+    //   category: "",
+    //   sku: "",
+    //   hsn: "",
+    //   quantity: "",
+    //   price: "",
+    // });
   };
 
   useEffect(() => {
@@ -155,20 +133,132 @@ export default function Update() {
   };
 
   //   update
-  const updateOrder = () => {
-    console.log(orderData);
+
+const updateOrder = async () => {
+  // ✅ Use `products` (not `productOrders`)
+  const formattedProductOrders = products.map((po: any) => ({
+    pname: po.product?.pname || po.pname,
+    category: po.product?.category || po.category || "",
+    sku: po.product?.sku || po.sku || "",
+    hsn: po.product?.hsn || po.hsn || 0,
+    quantity: Number(po.quantity),
+    unitPrice: Number(po.unitPrice),
+    totalPrice: Number(po.totalPrice),
+  }));
+
+  const payload = {
+    payment: orderData.payment,
+    dangerous: orderData.dangerous,
+    totalOrderValue: Number(orderData.totalOrderValue),
+    pickupAddressId: pickupId || orderData.pickupAddressId,
+    rtoAddressId: isRtoSame 
+      ? (pickupId || orderData.pickupAddressId) 
+      : (rtoId || orderData.rtoAddressId),
+    buyer: {
+      id: orderData.buyer?.id,
+      name: orderData.buyer?.name,
+      mobileNo: orderData.buyer?.mobileNo,
+      alternateNumber: orderData.buyer?.alternateNo,
+      email: orderData.buyer?.email,
+      street: orderData.buyer?.street,
+      city: orderData.buyer?.city,
+      state: orderData.buyer?.state,
+      country: orderData.buyer?.country,
+      pincode: orderData.buyer?.pincode,
+    },
+    packageData: {
+      id: orderData.packageData?.id || orderData.package?.id,
+      physicalWeight: Number(orderData.packageData?.physicalWeight),
+      length: Number(orderData.packageData?.length),
+      breadth: Number(orderData.packageData?.breadth),
+      height: Number(orderData.packageData?.height),
+      volumetricWeight: Number(volumetricWeight) || 0,
+      applicableWeight: Number(applicableWeight) || 0,
+    },
+    productOrders: formattedProductOrders,  // ✅ Now uses `products` state
   };
 
+  console.log("Sending payload:", JSON.stringify(payload, null, 2));
+
+  try {
+    const res = await fetch(`/api/create-order/${orderData.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    console.log("Response:", data);
+    
+    if (res.ok) {
+      alert("Order updated successfully!"); 
+      redirect("/orders");
+    } else {
+      alert(`Error: ${data.message}`);
+    }
+  } catch (error) {
+    console.error("Update error:", error);
+    alert("Failed to update order");
+  }
+};
+  
+  // const updateOrder = async () => {
+  //   const payload = {orderData};
+  //   console.log(orderData);
+  //   console.log(payload);
+
+    
+
+  //   const res = await fetch(`/api/create-order/${orderData.id}`, {
+  //     method: "PUT",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify(payload),
+  //   });
+
+  //   const data=await res.json()
+  //   console.log(data);
+  //   if (res.ok) {
+  //     redirect("/orders")
+  //   }
+    
+  // };
+
+  // const fetchOrders = async () => {
+  //   const res = await fetch(`/api/create-order?orderId=${id}`);
+  //   const data = await res.json();
+  //   console.log(data);
+  //   // setOrderData({
+  //   //   ...data,
+  //   //   buyer: data.buyer ?? {},
+  //   //   package: data.package ?? {},
+  //   // });
+  //   setOrderData(data);
+  //   setProducts(data.productOrders);
+  //   console.log("fetch order data:",orderData);
+  //   console.log("fetch product data:",products);
+    
+  // };
+
   const fetchOrders = async () => {
+  try {
     const res = await fetch(`/api/create-order?orderId=${id}`);
     const data = await res.json();
-    console.log(data);
+    console.log("Fetched order data:", data);
+    
+    // ✅ Transform package to packageData
     setOrderData({
       ...data,
-      buyer: data.buyer ?? {},
-      package: data.package ?? {},
+      packageData: data.package,
     });
-  };
+    
+    // ✅ Set products directly (not productOrders)
+    if (data.productOrders) {
+      setProducts(data.productOrders);
+    }
+  } catch (error) {
+    console.error("Fetch error:", error);
+  }
+};
   useEffect(() => {
     // const data;
     fetchOrders();
@@ -200,10 +290,11 @@ export default function Update() {
       ...prev,
       [name]: value,
     }));
+    
   };
 
   const handleNestedChange = (
-    section: "buyer" | "package",
+    section: "buyer" | "packageData",
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const { name, value } = e.target;
@@ -215,6 +306,8 @@ export default function Update() {
         [name]: value,
       },
     }));
+    // console.log("handle change order data:",orderData);
+
   };
 
   useEffect(() => {
@@ -311,7 +404,7 @@ export default function Update() {
               className="lg:max-w-160 w-full border border-gray-300 px-3 py-1.5 bg-[#1d2a39] rounded-lg"
               onChange={(e) => {
                 // console.log(selectedAddress.id);
-                setRtoAddresses([]);
+                // setRtoAddresses([]);
                 setRtoSearch(e.target.value);
                 setRtoId(null);
               }}
@@ -319,21 +412,21 @@ export default function Update() {
 
             {/* fetch */}
             {rtoAddresses.length > 0 && (
-              <div className="absolute z-50 w-full border mt-1 rounded bg-[#24303f] text-white max-h-48 overflow-auto">
-                {addresses.map((addr) => (
+              <div className="absolute z-50 w-full border mt-1 rounded bg-[#24303f] text-white min-h-48 overflow-auto">
+                {rtoAddresses.map((addr) => (
                   <div
                     key={addr.id}
                     className="p-2 hover:bg-[#1d2a39] cursor-pointer"
                     onClick={() => {
-                      // setRtoAddresses(addr);
+                      setRtoAddresses(addr);
                       setRtoId(addr.id);
 
                       setRtoSearch(
                         `${addr.street}, ${addr.city}, ${addr.state} - ${addr.pincode}, ${addr.country}`
                       );
 
-                      setRtoAddresses([]);
-                      setShowRtoPicker(false);
+                      // setRtoAddresses([]);
+                      // setShowRtoPicker(false);
                     }}
                   >
                     <p className="font-medium">{addr.tag}</p>
@@ -601,7 +694,7 @@ export default function Update() {
           {editIndex !== null ? "Update Product" : "Add Product"}
         </button>
       </div>{" "}
-      {productOrders?.map((po: any, index: any) => (
+      {products?.map((po: any, index: any) => (
         <div
           key={index}
           className="max-w-md bg-[#475569] text-white rounded-xl my-4"
@@ -631,7 +724,7 @@ export default function Update() {
               <button
                 className="text-red-400"
                 onClick={() => {
-                  setProductOrders((prev) =>
+                  setProducts((prev) =>
                     prev.filter((_, i) => i !== index)
                   );
 
@@ -697,8 +790,8 @@ export default function Update() {
               <span className="bg-white py-1.5 px-2 border text-black">Kg</span>
               <input
                 name="physicalWeight"
-                value={orderData.package?.physicalWeight}
-                onChange={(e) => handleNestedChange("package", e)}
+                value={orderData.packageData?.physicalWeight}
+                onChange={(e) => handleNestedChange("packageData", e)}
                 type="text"
                 className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-r-lg"
                 placeholder="0.00"
@@ -723,8 +816,8 @@ export default function Update() {
 
                 <input
                   name="length"
-                  value={orderData.package?.length}
-                  onChange={(e) => handleNestedChange("package", e)}
+                  value={orderData.packageData?.length}
+                  onChange={(e) => handleNestedChange("packageData", e)}
                   type="text"
                   className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-r-lg"
                   placeholder="length"
@@ -737,8 +830,8 @@ export default function Update() {
 
                 <input
                   name="breadth"
-                  value={orderData.package?.breadth}
-                  onChange={(e) => handleNestedChange("package", e)}
+                  value={orderData.packageData?.breadth}
+                  onChange={(e) => handleNestedChange("packageData", e)}
                   type="text"
                   className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-r-lg"
                   placeholder="breadth"
@@ -751,8 +844,8 @@ export default function Update() {
 
                 <input
                   name="height"
-                  value={orderData.package?.height}
-                  onChange={(e) => handleNestedChange("package", e)}
+                  value={orderData.packageData?.height}
+                  onChange={(e) => handleNestedChange("packageData", e)}
                   type="text"
                   className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-r-lg"
                   placeholder="height"

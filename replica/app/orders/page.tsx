@@ -3,6 +3,14 @@ import { Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+interface Filters {
+  startDate: string;
+  endDate: string;
+  hsn: string;
+  sku: string;
+  addressTag: string;
+}
+
 export default function Orders() {
   const [users, setUsers] = useState<any[]>([]);
   const [page, setPage] = useState(1);
@@ -10,32 +18,101 @@ export default function Orders() {
   const limit = 5;
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searching, setSearching] = useState(false)
+  const [searching, setSearching] = useState(false);
   const [orderId, setOrderId] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
 
-  const fetchOrders = async () => {
+  const [filters, setFilters] = useState<Filters>({
+    startDate: "",
+    endDate: "",
+    hsn: "",
+    sku: "",
+    addressTag: "",
+  });
+
+  // For showing count on filter button
+  const appliedFiltersCount = Object.values(filters).filter(Boolean).length;
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    fetchOrders(filters, 1); // Always go back to page 1 when applying new filters
+  }, [filters]);
+
+  const fetchOrders = async (
+    filters: Filters = {
+      startDate: "",
+      endDate: "",
+      hsn: "",
+      sku: "",
+      addressTag: "",
+    },
+    newPage: number = page
+  ) => {
     setLoading(true);
 
-    const params = new URLSearchParams();
-    if (orderId) params.append("orderId", orderId);
-    if (fromDate) params.append("fromDate", fromDate);
-    if (toDate) params.append("toDate", toDate);
+    try {
+      const params = new URLSearchParams();
 
-    // const res = await fetch(`/api/create-order?${params.toString()}`);
-    const res = await fetch(`/api/create-order`);
-    const data = await res.json();
+      // Now TypeScript is 100% happy — no more "property does not exist" errors
+      if (filters.startDate) params.append("start_date", filters.startDate);
+      if (filters.endDate) params.append("end_date", filters.endDate);
+      if (filters.hsn) params.append("hsn", filters.hsn.trim());
+      if (filters.sku) params.append("sku", filters.sku.trim());
+      if (filters.addressTag)
+        params.append("address_tag", filters.addressTag.trim());
 
-    setOrders(Array.isArray(data) ? data : [data]);
-    setLoading(false);
+      params.append("page", page.toString());
+      params.append("limit", limit.toString());
+      console.log(params);
+      const res = await fetch(`/api/orders?${params.toString()}`);
+      const data = await res.json();
+
+      setOrders(data.orders || []);
+      setTotalPages(data.pagination?.totalPages || 1); // ← THIS IS KEY
+      setPage(newPage); // ← Update page state only after success
+    } catch (err) {
+      console.error(err);
+      // toast.error("Failed to fetch orders");
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // const fetchOrders = async () => {
+  //   try {
+  //     setLoading(true);
+
+  //     const params = new URLSearchParams();
+  //     if (orderId) params.append("orderId", orderId);
+  //     if (fromDate) params.append("fromDate", fromDate);
+  //     if (toDate) params.append("toDate", toDate);
+
+  //     const res = await fetch(`/api/create-order?${params.toString()}`);
+  //     // if (filters.startDate) params.append("start_date", filters.startDate);
+  //     // if (filters.endDate) params.append("end_date", filters.endDate);
+  //     // if (filters.hsn) params.append("hsn", filters.hsn);
+  //     // if (filters.sku) params.append("sku", filters.sku);
+  //     // if (filters.addressTag) params.append("address_tag", filters.addressTag);
+
+  //     // const res = await fetch(`/api/orders?${params.toString()}`);
+  //     const data = await res.json();
+
+  //     setOrders(Array.isArray(data) ? data : [data]);
+  //     setLoading(false);
+  //   } catch (err) {
+  //     // toast.error("Failed to fetch orders");
+  //     console.log("Failed to fetch orders");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const searchByOrderId = async () => {
     // setLoading(true);
-    setSearching(true)
+    setSearching(true);
     console.log("in search");
-    
+
     const params = new URLSearchParams();
     if (orderId) params.append("orderId", orderId);
     if (fromDate) params.append("fromDate", fromDate);
@@ -46,22 +123,19 @@ export default function Orders() {
     const res = await fetch(`/api/create-order?${params.toString()}`);
     const data = await res.json();
 
-    
     setOrders(Array.isArray(data) ? data : [data]);
     setLoading(false);
   };
 
-  const editHandler =()=>{
-
-  }
+  const editHandler = () => {};
   useEffect(() => {
     fetchOrders();
-    fetch(`/api/orders?page=${page}&limit=${limit}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setOrders(data.data);
-        setTotalPages(data.pagination.totalPages);
-      });
+    // fetch(`/api/orders?page=${page}&limit=${limit}`)
+    //   .then((res) => res.json())
+    //   .then((data) => {
+    //     setOrders(data.data);
+    //     setTotalPages(data.pagination.totalPages);
+    //   });
     // fetchOrders();
   }, [page]);
   return (
@@ -96,8 +170,8 @@ export default function Orders() {
               className="border w-full  h-10"
               value={orderId}
               onChange={(e) => {
-                setOrderId(e.target.value)
-                setSearching(true)
+                setOrderId(e.target.value);
+                setSearching(true);
               }}
             />
             {/* <button className="">Clear</button>*/}
@@ -108,23 +182,20 @@ export default function Orders() {
               ></Search>
             </button>
 
-            
-            {searching &&
-            <button
-            onClick={() => {
-              setOrderId("");
-              setFromDate("");
-              setToDate("");
-              fetchOrders();
-              setSearching(false)
-            }}
-            className="px-4 py-2 bg-gray-500 rounded absolute right-12 "
-          >
-            Reset
-          </button>
-            
-            }
-            
+            {searching && (
+              <button
+                onClick={() => {
+                  setOrderId("");
+                  setFromDate("");
+                  setToDate("");
+                  fetchOrders();
+                  setSearching(false);
+                }}
+                className="px-4 py-2 bg-gray-500 rounded absolute right-12 "
+              >
+                Reset
+              </button>
+            )}
           </div>
           {/* 
           <div className="border w-full flex space-x-5 justify-center items-center">
@@ -138,6 +209,181 @@ export default function Orders() {
               Bulk Actions
             </button>
           </div> */}
+        </div>
+
+        <button
+          onClick={() => setFilterOpen(true)}
+          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded-lg transition border border-gray-700"
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+            />
+          </svg>
+          Filters
+          {appliedFiltersCount > 0 && (
+            <span className="bg-blue-600 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center ml-1">
+              {appliedFiltersCount}
+            </span>
+          )}
+        </button>
+
+        {/* Right Sidebar Filter Drawer - DARK MODE */}
+        <div
+          className={`fixed inset-0 z-50 ${
+            filterOpen ? "visible" : "invisible"
+          }`}
+        >
+          {/* Backdrop */}
+          <div
+            onClick={() => setFilterOpen(false)}
+            className={`absolute inset-0 bg-black transition-opacity duration-300 ${
+              filterOpen ? "opacity-70" : "opacity-0"
+            }`}
+          />
+
+          {/* Sidebar - Dark Theme */}
+          <div
+            className={`absolute right-0 top-0 h-full w-96 bg-gray-900 shadow-2xl transition-transform duration-300 ${
+              filterOpen ? "translate-x-0" : "translate-x-full"
+            }`}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-800">
+              <h2 className="text-xl font-semibold text-white">Filters</h2>
+              <button
+                onClick={() => setFilterOpen(false)}
+                className="text-gray-400 hover:text-white transition"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            {/* Filters Body */}
+            <div className="p-6 space-y-7 overflow-y-auto h-full pb-32 text-gray-300">
+              {/* Date Range */}
+              <div>
+                <label className="block text-sm font-medium mb-3 text-gray-200">
+                  Date Range
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="date"
+                    value={filters.startDate}
+                    onChange={(e) =>
+                      setFilters({ ...filters, startDate: e.target.value })
+                    }
+                    className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+                  />
+                  <input
+                    type="date"
+                    value={filters.endDate}
+                    onChange={(e) =>
+                      setFilters({ ...filters, endDate: e.target.value })
+                    }
+                    className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+                  />
+                </div>
+              </div>
+
+              {/* HSN */}
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">
+                  HSN
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter HSN code"
+                  value={filters.hsn}
+                  onChange={(e) =>
+                    setFilters({ ...filters, hsn: e.target.value })
+                  }
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2.5 placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+                />
+              </div>
+
+              {/* SKU */}
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">
+                  SKU
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter SKU"
+                  value={filters.sku}
+                  onChange={(e) =>
+                    setFilters({ ...filters, sku: e.target.value })
+                  }
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2.5 placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+                />
+              </div>
+
+              {/* Address Tag */}
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-200">
+                  Address Tag
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Home, Office, Gift"
+                  value={filters.addressTag}
+                  onChange={(e) =>
+                    setFilters({ ...filters, addressTag: e.target.value })
+                  }
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2.5 placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+                />
+              </div>
+            </div>
+
+            {/* Bottom Action Buttons */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gray-900 border-t border-gray-800 flex gap-3">
+              <button
+                onClick={() => {
+                  setFilters({
+                    startDate: "",
+                    endDate: "",
+                    hsn: "",
+                    sku: "",
+                    addressTag: "",
+                  });
+                  fetchOrders();
+                  setFilterOpen(false);
+                }}
+                className="flex-1 py-3 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 transition font-medium"
+              >
+                Clear All
+              </button>
+              <button
+                onClick={() => {
+                  fetchOrders(filters);
+                  setFilterOpen(false);
+                }}
+                className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-lg"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* <div className="flex justify-between w-full">
@@ -206,8 +452,8 @@ export default function Orders() {
           <p className="grid-cols-1">Action </p>
         </div>
 
-        {orders.map((order) => (
-          <div key={order.id} className="bg-[#24303f] grid grid-cols-10 p-5">
+        {orders?.map((order, index) => (
+          <div key={index} className="bg-[#24303f] grid grid-cols-10 p-5">
             {/* <div className="w-full"> */}
             {/* <div className="flex items-center justify-between"> */}
             <p className="grid-cols-1">{order.id}</p>
@@ -220,7 +466,16 @@ export default function Orders() {
             <p className="grid-cols-1">"NA"</p>
             <p className="grid-cols-1">{order.status}</p>
             <p className="grid-cols-1">
-              <button className="bg-blue-500 px-2 grid-cols-1" ><Link href={{pathname:"/update-order",query:{orderId:order.id}}}>edit</Link></button>
+              <button className="bg-blue-500 px-2 grid-cols-1">
+                <Link
+                  href={{
+                    pathname: "/update-order",
+                    query: { orderId: order.id },
+                  }}
+                >
+                  edit
+                </Link>
+              </button>
             </p>
             {/* </div> */}
             {/* </div> */}
@@ -228,7 +483,7 @@ export default function Orders() {
         ))}
       </div>
 
-      {/* pagination */}
+      {/* pagination
       <div className="flex justify-center items-center gap-4">
         <button
           disabled={page === 1}
@@ -249,6 +504,48 @@ export default function Orders() {
         >
           Next
         </button>
+      </div> */}
+
+      {/* Pagination - Perfect & Beautiful */}
+      <div className="flex justify-center items-center gap-6 mt-10 pb-10">
+        <button
+          onClick={() => fetchOrders(filters, page - 1)}
+          disabled={page === 1 || loading}
+          className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium"
+        >
+          ← Previous
+        </button>
+
+        <div className="flex items-center gap-3">
+          {[...Array(totalPages)].map((_, i) => (
+            <button
+              key={i + 1}
+              onClick={() => fetchOrders(filters, i + 1)}
+              disabled={loading}
+              className={`w-10 h-10 rounded-lg font-medium transition ${
+                page === i + 1
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+              }`}
+            >
+              {i + 1}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={() => fetchOrders(filters, page + 1)}
+          disabled={page === totalPages || loading}
+          className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium"
+        >
+          Next →
+        </button>
+      </div>
+
+      {/* Page info */}
+      <div className="text-center text-gray-400 text-sm mb-6">
+        Showing page <strong>{page}</strong> of <strong>{totalPages}</strong>(
+        {orders.length} orders this page)
       </div>
     </div>
   );

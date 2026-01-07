@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     } = body;
 
     console.log(pickupAddressId);
-    
+
     const order = await prisma.$transaction(async (tx) => {
       // 1️⃣ Create Buyer
       const createdBuyer = await tx.buyer.create({
@@ -70,7 +70,6 @@ export async function POST(req: Request) {
         )
       );
 
-      
       const totalOrderValue = createdProducts.reduce(
         (sum, p, idx) => sum + p.price.toNumber() * products[idx].quantity,
         0
@@ -101,23 +100,20 @@ export async function POST(req: Request) {
       return createdOrder;
     });
 
-    return NextResponse.json(
-      {sucess:true,
-        message: "Order created successfully",
-        data: order,
-        error: null,
-      }
-    );
+    return NextResponse.json({
+      sucess: true,
+      message: "Order created successfully",
+      data: order,
+      error: null,
+    });
   } catch (error) {
     console.error(error);
-    return NextResponse.json(
-      {
-        sucess:false,
-        message: "Failed to create order",
-        data: null,
-        error: error,
-      }
-    );
+    return NextResponse.json({
+      sucess: false,
+      message: "Failed to create order",
+      data: null,
+      error: error,
+    });
   }
 }
 
@@ -144,6 +140,11 @@ export async function GET(req: NextRequest) {
         },
       });
 
+      const response = {
+        ...order,
+        packageData:order?.package, // alias
+      };
+
       if (!order) {
         return NextResponse.json(
           { message: "Order not found" },
@@ -151,7 +152,7 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      return NextResponse.json(order);
+      return NextResponse.json(response);
     }
 
     // 🔹 2️⃣ Date filter
@@ -188,9 +189,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function PATCH(req :NextRequest){
-  
-}
+export async function PATCH(req: NextRequest) {}
 
 export async function PUT(
   req: Request,
@@ -203,12 +202,9 @@ export async function PUT(
 
     if (orderId) {
       console.log(orderId);
-      
     } else {
       console.log("not found");
-      
     }
-    
 
     const {
       payment,
@@ -301,8 +297,6 @@ export async function PUT(
   }
 }
 
-
-
 // export async function PUT(
 //   req: Request,
 //   { params }: { params: { orderId: string } }
@@ -312,7 +306,7 @@ export async function PUT(
 //     const body = await req.json();
 
 //     console.log(orderId);
-    
+
 //     const {
 //       status,
 //       payment,
