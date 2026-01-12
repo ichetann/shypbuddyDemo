@@ -6,7 +6,35 @@ import { useEffect, useState } from "react";
 export default function Update() {
   const searchParams = useSearchParams();
   const id = searchParams.get("orderId");
-  const [orderData, setOrderData] = useState<any>({});
+  const [orderData, setOrderData] = useState<any>({
+    payment: "",
+    dangerous: "",
+    totalOrderValue: "",
+    pickupAddressId: "",
+    rtoAddressId: "",
+    buyer: {
+      id: "",
+      name: "",
+      mobileNo: "",
+      alternateNumber: "",
+      email: "",
+      street: "",
+      city: "",
+      state: "",
+      country: "",
+      pincode: "",
+    },
+    packageData: {
+      id: "",
+      physicalWeight: 0.0,
+      length: 0.0,
+      breadth: 0.0,
+      height: 0.0,
+      volumetricWeight: 0.0,
+      applicableWeight: 0.0,
+    },
+    productOrders: [],
+  });
   const [dangerousGoods, setDangerousGoods] = useState<boolean>(false);
   const [search, setSearch] = useState("");
   const [rtoSearch, setRtoSearch] = useState("");
@@ -14,8 +42,6 @@ export default function Update() {
   const [addresses, setAddresses] = useState<any[]>([]); //its pickup and rto address
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [editIndex, setEditIndex] = useState<number | null>(null);
-
-
 
   const [product, setProduct] = useState({
     pname: "",
@@ -28,7 +54,6 @@ export default function Update() {
   const [products, setProducts] = useState<any[]>([]);
   const [calculatedTotal, setCalculatedTotal] = useState(0);
   const [orderTotal, setOrderTotal] = useState(0);
-
 
   const [paymentMethod, setPaymentMethod] = useState<"PREPAID" | "COD" | "">(
     ""
@@ -93,15 +118,14 @@ export default function Update() {
       // setProductOrders((prev) => [...prev, newProductOrder]);
     }
 
-    // 🧹 Reset form
-    // setProduct({
-    //   pname: "",
-    //   category: "",
-    //   sku: "",
-    //   hsn: "",
-    //   quantity: "",
-    //   price: "",
-    // });
+    setProduct({
+      pname: "",
+      category: "",
+      sku: "",
+      hsn: "",
+      quantity: "",
+      price: "",
+    });
   };
 
   useEffect(() => {
@@ -134,80 +158,78 @@ export default function Update() {
 
   //   update
 
-const updateOrder = async () => {
-  // ✅ Use `products` (not `productOrders`)
-  const formattedProductOrders = products.map((po: any) => ({
-    pname: po.product?.pname || po.pname,
-    category: po.product?.category || po.category || "",
-    sku: po.product?.sku || po.sku || "",
-    hsn: po.product?.hsn || po.hsn || 0,
-    quantity: Number(po.quantity),
-    unitPrice: Number(po.unitPrice),
-    totalPrice: Number(po.totalPrice),
-  }));
+  const updateOrder = async () => {
+    // ✅ Use `products` (not `productOrders`)
+    const formattedProductOrders = products.map((po: any) => ({
+      pname: po.product?.pname || po.pname,
+      category: po.product?.category || po.category || "",
+      sku: po.product?.sku || po.sku || "",
+      hsn: po.product?.hsn || po.hsn || 0,
+      quantity: Number(po.quantity),
+      unitPrice: Number(po.unitPrice),
+      totalPrice: Number(po.totalPrice),
+    }));
 
-  const payload = {
-    payment: orderData.payment,
-    dangerous: orderData.dangerous,
-    totalOrderValue: Number(orderData.totalOrderValue),
-    pickupAddressId: pickupId || orderData.pickupAddressId,
-    rtoAddressId: isRtoSame 
-      ? (pickupId || orderData.pickupAddressId) 
-      : (rtoId || orderData.rtoAddressId),
-    buyer: {
-      id: orderData.buyer?.id,
-      name: orderData.buyer?.name,
-      mobileNo: orderData.buyer?.mobileNo,
-      alternateNumber: orderData.buyer?.alternateNo,
-      email: orderData.buyer?.email,
-      street: orderData.buyer?.street,
-      city: orderData.buyer?.city,
-      state: orderData.buyer?.state,
-      country: orderData.buyer?.country,
-      pincode: orderData.buyer?.pincode,
-    },
-    packageData: {
-      id: orderData.packageData?.id || orderData.package?.id,
-      physicalWeight: Number(orderData.packageData?.physicalWeight),
-      length: Number(orderData.packageData?.length),
-      breadth: Number(orderData.packageData?.breadth),
-      height: Number(orderData.packageData?.height),
-      volumetricWeight: Number(volumetricWeight) || 0,
-      applicableWeight: Number(applicableWeight) || 0,
-    },
-    productOrders: formattedProductOrders,  // ✅ Now uses `products` state
+    const payload = {
+      payment: orderData.payment,
+      dangerous: orderData.dangerous,
+      totalOrderValue: Number(orderData.totalOrderValue),
+      pickupAddressId: pickupId || orderData.pickupAddressId,
+      rtoAddressId: isRtoSame
+        ? pickupId || orderData.pickupAddressId
+        : rtoId || orderData.rtoAddressId,
+      buyer: {
+        id: orderData.buyer?.id,
+        name: orderData.buyer?.name,
+        mobileNo: orderData.buyer?.mobileNo,
+        alternateNumber: orderData.buyer?.alternateNo,
+        email: orderData.buyer?.email,
+        street: orderData.buyer?.street,
+        city: orderData.buyer?.city,
+        state: orderData.buyer?.state,
+        country: orderData.buyer?.country,
+        pincode: orderData.buyer?.pincode,
+      },
+      packageData: {
+        id: orderData.packageData?.id || orderData.package?.id,
+        physicalWeight: Number(orderData.packageData?.physicalWeight),
+        length: Number(orderData.packageData?.length),
+        breadth: Number(orderData.packageData?.breadth),
+        height: Number(orderData.packageData?.height),
+        volumetricWeight: Number(volumetricWeight) || 0,
+        applicableWeight: Number(applicableWeight) || 0,
+      },
+      productOrders: formattedProductOrders, // ✅ Now uses `products` state
+    };
+
+    console.log("Sending payload:", JSON.stringify(payload, null, 2));
+
+    try {
+      const res = await fetch(`/api/create-order/${orderData.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      console.log("Response:", data);
+
+      if (res.ok) {
+        // alert("Order updated successfully!");
+        redirect("/orders");
+      } else {
+        alert(`Error: ${data.message}`);
+      }
+    } catch (error) {
+      console.error("Update error:", error);
+      // alert("Failed to update order");
+    }
   };
 
-  console.log("Sending payload:", JSON.stringify(payload, null, 2));
-
-  try {
-    const res = await fetch(`/api/create-order/${orderData.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json();
-    console.log("Response:", data);
-    
-    if (res.ok) {
-      alert("Order updated successfully!"); 
-      redirect("/orders");
-    } else {
-      alert(`Error: ${data.message}`);
-    }
-  } catch (error) {
-    console.error("Update error:", error);
-    alert("Failed to update order");
-  }
-};
-  
   // const updateOrder = async () => {
   //   const payload = {orderData};
   //   console.log(orderData);
   //   console.log(payload);
-
-    
 
   //   const res = await fetch(`/api/create-order/${orderData.id}`, {
   //     method: "PUT",
@@ -220,7 +242,7 @@ const updateOrder = async () => {
   //   if (res.ok) {
   //     redirect("/orders")
   //   }
-    
+
   // };
 
   // const fetchOrders = async () => {
@@ -236,29 +258,29 @@ const updateOrder = async () => {
   //   setProducts(data.productOrders);
   //   console.log("fetch order data:",orderData);
   //   console.log("fetch product data:",products);
-    
+
   // };
 
   const fetchOrders = async () => {
-  try {
-    const res = await fetch(`/api/create-order?orderId=${id}`);
-    const data = await res.json();
-    console.log("Fetched order data:", data);
-    
-    // ✅ Transform package to packageData
-    setOrderData({
-      ...data,
-      packageData: data.package,
-    });
-    
-    // ✅ Set products directly (not productOrders)
-    if (data.productOrders) {
-      setProducts(data.productOrders);
+    try {
+      const res = await fetch(`/api/create-order?orderId=${id}`);
+      const data = await res.json();
+      console.log("Fetched order data:", data);
+
+      // ✅ Transform package to packageData
+      setOrderData({
+        ...data,
+        packageData: data.package,
+      });
+
+      // ✅ Set products directly (not productOrders)
+      if (data.productOrders) {
+        setProducts(data.productOrders);
+      }
+    } catch (error) {
+      console.error("Fetch error:", error);
     }
-  } catch (error) {
-    console.error("Fetch error:", error);
-  }
-};
+  };
   useEffect(() => {
     // const data;
     fetchOrders();
@@ -290,7 +312,6 @@ const updateOrder = async () => {
       ...prev,
       [name]: value,
     }));
-    
   };
 
   const handleNestedChange = (
@@ -307,7 +328,6 @@ const updateOrder = async () => {
       },
     }));
     // console.log("handle change order data:",orderData);
-
   };
 
   useEffect(() => {
@@ -724,9 +744,7 @@ const updateOrder = async () => {
               <button
                 className="text-red-400"
                 onClick={() => {
-                  setProducts((prev) =>
-                    prev.filter((_, i) => i !== index)
-                  );
+                  setProducts((prev) => prev.filter((_, i) => i !== index));
 
                   if (editIndex === index) {
                     setEditIndex(null);

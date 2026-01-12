@@ -118,6 +118,7 @@ export async function GET(req: NextRequest) {
       prisma.order.findMany({
         where,
         include: {
+          // deliveryPartner:true,
           buyer: {
             select: {
               name: true,

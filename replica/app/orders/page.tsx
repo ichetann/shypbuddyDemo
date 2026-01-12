@@ -2,6 +2,11 @@
 import { Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import OrderActions from "../(orders)/OrderActions";
+import { deleteOrder } from "../actions/orders";
+import { cancelDelhiveryShipment, createDelhiveryShipment, createDelhiveryWarehouse } from "../actions/delhivery";
+import { toast } from "sonner";
+import { redirect, useRouter } from "next/navigation";
 
 interface Filters {
   startDate: string;
@@ -23,6 +28,7 @@ export default function Orders() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
+  const router= useRouter()
 
   const [filters, setFilters] = useState<Filters>({
     startDate: "",
@@ -40,6 +46,30 @@ export default function Orders() {
     fetchOrders(filters, 1); // Always go back to page 1 when applying new filters
   }, [filters]);
 
+  const shipHandler= async(orderId:string)=>{
+    console.log("in shiphandler");
+    
+    const warehouseRes=await createDelhiveryWarehouse(orderId);
+    console.log("warehous res",warehouseRes);
+    
+
+    // if (!warehouseRes.success) {
+        if (warehouseRes.success) {
+          toast.success("Warehouse Created Sucessfully");
+          const shipmentResponse = await createDelhiveryShipment(orderId);
+          console.log(shipmentResponse);
+          toast.success("Shipment Created Sucessfully");
+        }else{
+          console.log("something went wrong");  
+          toast.error("something went wrong in warehouse creation");
+
+        }
+      
+    // createDelhiveryShipment(orderId);
+    fetchOrders(filters, 1)
+    // redirect('/orders')
+  }
+
   const fetchOrders = async (
     filters: Filters = {
       startDate: "",
@@ -48,10 +78,12 @@ export default function Orders() {
       sku: "",
       addressTag: "",
     },
+
     newPage: number = page
   ) => {
     setLoading(true);
 
+    // const isShipped = orders?.status === "READY_TO_SHIP";
     try {
       const params = new URLSearchParams();
 
@@ -115,8 +147,8 @@ export default function Orders() {
 
     const params = new URLSearchParams();
     if (orderId) params.append("orderId", orderId);
-    if (fromDate) params.append("fromDate", fromDate);
-    if (toDate) params.append("toDate", toDate);
+    // if (fromDate) params.append("fromDate", fromDate);
+    // if (toDate) params.append("toDate", toDate);
 
     console.log(params);
     // params ? const res = await fetch(`/api/create-order?${params.toString()}`) :const res = await fetch(`/api/create-order`);
@@ -463,10 +495,13 @@ export default function Orders() {
             <p className="grid-cols-1">{order.package?.applicableWeight}</p>
             <p className="grid-cols-1">{order.pickupAddress?.tag} </p>
             <p className="grid-cols-1">{order.rtoAddress?.tag}</p>
-            <p className="grid-cols-1">"NA"</p>
+            <p className="grid-cols-1">
+              {((order.deliveryPartner || "no partner") && order.AWBNumber) ||
+                "NA"}
+            </p>
             <p className="grid-cols-1">{order.status}</p>
             <p className="grid-cols-1">
-              <button className="bg-blue-500 px-2 grid-cols-1">
+              {/* <button className="bg-blue-500 px-2 grid-cols-1">
                 <Link
                   href={{
                     pathname: "/update-order",
@@ -475,7 +510,43 @@ export default function Orders() {
                 >
                   edit
                 </Link>
+              </button> */}
+              <button
+                className={`mx-4 px-4 py-2
+                  ${
+                    order.status === "READY_TO_SHIP"
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-[#7c3aed] rounded-lg"
+                  }
+                  `}
+                type="button"
+                disabled={order.status === "READY_TO_SHIP"}
+                onClick={()=>shipHandler(order.id)}
+              >
+                Ship
               </button>
+              <OrderActions
+                orderId={order.id}
+                status={order.status}
+                onDelete={async () => {
+                  if (confirm("Delete this order?")) {
+                    await deleteOrder(order.id);
+                  }
+                }}
+                onCancel={async () => {
+                  if (!confirm("Cancel this shipment?")) return;
+
+                  const res = await cancelDelhiveryShipment(order.id);
+
+                  if (!res.success) {
+                    toast.error("Cancellation failed");
+                    return;
+                  }
+
+                  toast.success("Shipment cancelled");
+                  fetchOrders(filters, page);
+                }}
+              />
             </p>
             {/* </div> */}
             {/* </div> */}

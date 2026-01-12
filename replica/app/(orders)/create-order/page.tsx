@@ -1,6 +1,10 @@
 "use client";
+import { createDelhiveryShipment } from "@/app/actions/delhivery";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Router } from "next/router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 export default function CreateOrder() {
   const [dangerousGoods, setDangerousGoods] = useState<boolean>(false);
@@ -70,6 +74,38 @@ export default function CreateOrder() {
     }));
     console.log(buyer);
   };
+
+  useEffect(() => {
+    const fetchAddress = async () => {
+      // Only fetch if pincode is exactly 6 digits
+      if (buyerAddress.buyerPincode?.length === 6) {
+        try {
+          const response = await fetch(
+            `https://api.postalpincode.in/pincode/${buyerAddress.buyerPincode}`
+          );
+          const data = await response.json();
+
+          if (data[0].Status === "Success") {
+            const postOffice = data[0].PostOffice[0]; // Get the first result
+
+            setBuyerAddress((prev) => ({
+              ...prev,
+              buyerCity: postOffice.District,
+              buyerState: postOffice.State,
+              buyerCountry: postOffice.Country,
+              buyerLandmark: postOffice.Name, // This is the area name/branch office
+            }));
+          } else {
+            console.error("Invalid Pincode");
+          }
+        } catch (error) {
+          console.error("Error fetching pincode data:", error);
+        }
+      }
+    };
+
+    fetchAddress();
+  }, [buyerAddress.buyerPincode]);
   const addressHandler = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
 
@@ -88,6 +124,8 @@ export default function CreateOrder() {
     }));
     console.log(product);
   };
+
+  const fetchIndiaPost = () => {};
 
   const addProduct = () => {
     if (!product.name || !product.quantity || !product.price) {
@@ -199,9 +237,97 @@ export default function CreateOrder() {
     };
   };
 
-  const payload = buildOrderPayload();
-  const createOrder = async () => {
+  async function createWarehouse(payload: any) {
     try {
+      const res = await fetch("/api/delhivery", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      // return res;
+      const data = await res.json();
+
+      if (!res.ok) {
+        // alert(data.message || "Order creation failed");
+
+        console.log("warehouse created:", data);
+        return;
+      }
+      console.log(data);
+
+      alert("warehouse-created sucessfully");
+      return data;
+    } catch (error: any) {
+      const errorMsg = JSON.stringify(error);
+
+      // ✅ IGNORE THIS SPECIFIC ERROR
+      if (
+        errorMsg.includes("already exists") &&
+        errorMsg.includes("CLIENT_STORES_CREATE")
+      ) {
+        console.log("Warehouse already exists → proceeding...");
+        return { ignored: true };
+      }
+
+      // ❌ Any other error should stop execution
+      throw error;
+    }
+  }
+
+  const payload = buildOrderPayload();
+    const shipHandler = async () => {
+      try {
+        const warehousePayload = {
+          name: buyer.name,
+          email: buyer.email,
+          phone: buyer.mobileNo,
+          address: selectedAddress.street,
+          city: selectedAddress.city,
+          state: selectedAddress.state,
+          country: selectedAddress.country,
+          pin: String(selectedAddress.pincode),
+          return_address: selectedAddress.street,
+          return_pin: String(selectedAddress.pincode),
+          return_city: selectedAddress.city,
+          return_state: selectedAddress.state,
+          return_country: selectedAddress.country,
+        };
+        console.log(warehousePayload);
+        const data = await createOrder();
+        const warehouseRes = await createWarehouse(warehousePayload);
+        console.log(warehouseRes);
+        if (warehouseRes.success) {
+          toast.success("Warehouse Created Sucessfully");
+          const shipmentResponse = await createDelhiveryShipment(data?.data?.id);
+          console.log(shipmentResponse);
+          toast.success("Shipment Created Sucessfully");
+        }else{
+          console.log("something went wrong");  
+          toast.error("something went wrong in warehouse creation");
+
+        }
+      } catch (error) {
+        console.log(error);
+        // toast('A Sonner toast', {
+        //   className: 'my-classname',
+        //   description: 'With a description and an icon',
+        //   duration: 5000,
+        //   icon: <MyIcon />,
+          toast.error("something went wrong");
+        alert(error);
+      }
+
+      // update order status to ready to ship
+      redirect("/orders");
+    };
+
+
+  const createOrder = async () => {
+    // const data=1;
+    try {
+      // createWarehouse(warehousePayload);
       const res = await fetch("/api/create-order", {
         method: "POST",
         headers: {
@@ -218,9 +344,16 @@ export default function CreateOrder() {
       }
 
       console.log("Order created:", data);
+      return data;
     } catch (err) {
       console.error("Order error:", err);
+      alert(err);
     }
+
+    console.log(selectedAddress);
+    redirect("/orders");
+    // router.push("/orders", payload)
+    // return data.orderId;
   };
 
   return (
@@ -349,6 +482,45 @@ export default function CreateOrder() {
           </div>
         </div>
 
+        <div className="flex flex-wrap gap-5">
+          {/* Pincode Input */}
+          {/* <div className="flex-1">
+    <label className="font-semibold">Buyer's Pincode *</label>
+    <input
+      name="buyerPincode"
+      type="text"
+      value={buyerAddress.buyerPincode || ""}
+      onChange={addressHandler}
+      className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
+      placeholder="6 Digit Pincode"
+      maxLength={6}
+    />
+  </div> */}
+
+          {/* City Input */}
+          {/* <div className="flex-1">
+    <label className="font-semibold">City</label>
+    <input
+      name="buyerCity"
+      type="text"
+      value={buyerAddress.buyerCity || ""}
+      onChange={addressHandler}
+      className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
+    />
+  </div> */}
+
+          {/* State Input */}
+          {/* <div className="flex-1">
+    <label className="font-semibold">State</label>
+    <input
+      name="buyerState"
+      type="text"
+      value={buyerAddress.buyerState || ""}
+      onChange={addressHandler}
+      className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
+    />
+  </div> */}
+        </div>
         {/* buyers Address */}
         <div className="">
           <h3 className="my-4">
@@ -361,6 +533,7 @@ export default function CreateOrder() {
               </label>
               <input
                 type="text"
+                value={buyerAddress.buyerStreet || ""}
                 name="buyerStreet"
                 onChange={addressHandler}
                 className="w-full border border-gray-500 p-1 my-2  bg-[#1d2a39] rounded-lg"
@@ -373,13 +546,19 @@ export default function CreateOrder() {
               </label>
               <input
                 name="buyerPincode"
+                value={buyerAddress.buyerPincode || ""}
                 onChange={addressHandler}
+                // onChange={(e)=>{
+                //   addressHandler(e);
+                //   fetchIndiaPost()
+                // }}
                 type="text"
                 className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
                 placeholder="Enter Buyer's Pincode"
               />
             </div>
           </div>
+          {/* buyeraddress */}
           <div className="flex flex-wrap gap-5 my-4  ">
             <div>
               <label htmlFor="" className="font-semibold">
@@ -387,6 +566,7 @@ export default function CreateOrder() {
               </label>
               <input
                 name="buyerLandmark"
+                value={buyerAddress.buyerLandmark || ""}
                 onChange={addressHandler}
                 type="text"
                 className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -400,6 +580,7 @@ export default function CreateOrder() {
               </label>
               <input
                 name="buyerCity"
+                value={buyerAddress.buyerCity || ""}
                 onChange={addressHandler}
                 type="text"
                 className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -413,6 +594,7 @@ export default function CreateOrder() {
               </label>
               <input
                 name="buyerState"
+                value={buyerAddress.buyerState || ""}
                 onChange={addressHandler}
                 type="text"
                 className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -426,6 +608,7 @@ export default function CreateOrder() {
               </label>
               <input
                 name="buyerCountry"
+                value={buyerAddress.buyerCountry || ""}
                 onChange={addressHandler}
                 type="text"
                 className="w-full border border-gray-500 p-1 my-2 bg-[#1d2a39] rounded-lg"
@@ -520,7 +703,7 @@ export default function CreateOrder() {
               </div>
             </div>
             <button
-              className="px-3 py-1 my-3 rounded bg-[#a78bfa] text-white"
+              className="px-3 py-1 my-3 rounded bg-[#7c3aed] text-white"
               type="button"
               onClick={addProduct}
             >
@@ -795,18 +978,23 @@ export default function CreateOrder() {
             <div></div>
             <div className="ml-auto mr-4">
               <button
+                className="mx-4 px-4 py-2 bg-[#7c3aed] rounded-lg "
+                onClick={shipHandler}
+              >
+                Ship
+              </button>
+              <button
                 className="mx-4 px-4 py-2 bg-white text-black rounded-lg"
                 onClick={createOrder}
               >
                 Save
               </button>
               <button className="mx-4 px-4 py-2 bg-red-500 rounded-lg text-white">
-                Cancel
+                <Link href={"/orders"}>Cancel</Link>
               </button>
             </div>
           </div>
         </div>
-        
       </div>
     </div>
   );

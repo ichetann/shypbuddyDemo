@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { addressSchema } from "../(components)/validators/addressSchema";
+import Link from "next/link";
 
 export default function AddAddress() {
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -226,8 +227,9 @@ export default function AddAddress() {
           <button
             className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
             onClick={saveAddressHandler}
-          >
+          > <Link href={"/orders"}>
             Verify & Save
+            </Link>
           </button>
         </div>
       </div>

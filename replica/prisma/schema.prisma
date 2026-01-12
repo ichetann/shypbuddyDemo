@@ -78,6 +78,7 @@ model Product {
   hsn       Int?
   quantity  Int
   price     Decimal
+  category  String?
 
   sellerId  String
   seller    User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
@@ -93,7 +94,7 @@ model Product_Orders{
   unitPrice   Decimal
   totalPrice  Decimal
   quantity     Int
-  category    String
+  category    String?
 
   product     Product   @relation(fields: [productId],references: [id],onDelete: Cascade)
   order     Order   @relation(fields: [orderId],references: [id],onDelete: Cascade)
@@ -140,12 +141,15 @@ model Order {
   sellerId          String
   seller            User      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
-  pickupAddressId   String   @unique
-  rtoAddressId      String   @unique
+  pickupAddressId   String?   
+  rtoAddressId      String?   
   buyerId           String   
 
-  pickupAddress     Address  @relation("PickupAddress", fields: [pickupAddressId], references: [id])
-  rtoAddress        Address  @relation("RtoAddress", fields: [rtoAddressId], references: [id])
+  AWBNumber         String?
+  deliveryPartner   String?
+
+  pickupAddress     Address?  @relation("PickupAddress", fields: [pickupAddressId], references: [id])
+  rtoAddress        Address?  @relation("RtoAddress", fields: [rtoAddressId], references: [id])
   buyer             Buyer    @relation(fields: [buyerId], references: [id])
 
   // products          Product[]
